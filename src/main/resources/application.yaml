@@ -1,0 +1,7 @@
+spring:
+  data:
+    redis:
+      host: redis-11295.c73.us-east-1-2.ec2.redns.redis-cloud.com
+      port: 11295
+      password: cJOtrfi9W3bhC0dJveNjJTBkT8NEhkyr
+      database: 0
