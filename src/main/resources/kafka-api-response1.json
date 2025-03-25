@@ -1,0 +1,178 @@
+{
+  "FileStreamSinkConnectorConnector_0": {
+    "status": {
+      "name": "FileStreamSinkConnectorConnector_0",
+      "connector": {
+        "state": "RUNNING",
+        "worker_id": "10.0.0.162:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "RUNNING",
+          "worker_id": "10.0.0.162:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "DatagenConnectorConnector_0": {
+    "status": {
+      "name": "DatagenConnectorConnector_0",
+      "connector": {
+        "state": "FAILED",
+        "worker_id": "10.0.0.163:8083",
+        "trace": "Connection timeout while fetching data from source"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "FAILED",
+          "worker_id": "10.0.0.163:8083",
+          "trace": "Task failed due to missing configuration"
+        }
+      ],
+      "type": "source"
+    }
+  },
+  "JdbcSinkConnector_1": {
+    "status": {
+      "name": "JdbcSinkConnector_1",
+      "connector": {
+        "state": "PAUSED",
+        "worker_id": "10.0.0.164:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "PAUSED",
+          "worker_id": "10.0.0.164:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "S3SinkConnector_2": {
+    "status": {
+      "name": "S3SinkConnector_2",
+      "connector": {
+        "state": "UNASSIGNED",
+        "worker_id": "10.0.0.165:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "UNASSIGNED",
+          "worker_id": "10.0.0.165:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "ElasticsearchConnector_3": {
+    "status": {
+      "name": "ElasticsearchConnector_3",
+      "connector": {
+        "state": "RUNNING",
+        "worker_id": "10.0.0.166:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "FAILED",
+          "worker_id": "10.0.0.166:8083",
+          "trace": "Failed to authenticate with Elasticsearch cluster"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "MongoSinkConnector_4": {
+    "status": {
+      "name": "MongoSinkConnector_4",
+      "connector": {
+        "state": "RUNNING",
+        "worker_id": "10.0.0.167:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "RUNNING",
+          "worker_id": "10.0.0.167:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "RabbitMQSourceConnector_5": {
+    "status": {
+      "name": "RabbitMQSourceConnector_5",
+      "connector": {
+        "state": "PAUSED",
+        "worker_id": "10.0.0.168:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "PAUSED",
+          "worker_id": "10.0.0.168:8083"
+        }
+      ],
+      "type": "source"
+    }
+  },
+  "KafkaSinkConnector_6": {
+    "status": {
+      "name": "KafkaSinkConnector_6",
+      "connector": {
+        "state": "FAILED",
+        "worker_id": "10.0.0.169:8083",
+        "trace": "Kafka broker unreachable, retrying connection"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "FAILED",
+          "worker_id": "10.0.0.169:8083",
+          "trace": "Producer failed to send message due to timeout"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "HDFSConnector_7": {
+    "status": {
+      "name": "HDFSConnector_7",
+      "connector": {
+        "state": "UNASSIGNED",
+        "worker_id": "10.0.0.170:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "UNASSIGNED",
+          "worker_id": "10.0.0.170:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  },
+  "BigQuerySinkConnector_8": {
+    "status": {
+      "name": "BigQuerySinkConnector_8",
+      "connector": {
+        "state": "RUNNING",
+        "worker_id": "10.0.0.171:8083"
+      },
+      "tasks": [
+        {
+          "id": 0,
+          "state": "RUNNING",
+          "worker_id": "10.0.0.171:8083"
+        }
+      ],
+      "type": "sink"
+    }
+  }
+}
+

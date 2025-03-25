@@ -5,3 +5,29 @@ spring:
       port: 11295
       password: cJOtrfi9W3bhC0dJveNjJTBkT8NEhkyr
       database: 0
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, metrics
+
+
+
+app:
+  kafka-connect:
+    instance:
+      url:
+#      - http://localhost:8080
+      - http://localhost:8081
+      - http://localhost:8082
+      - http://localhost:8083
+      - http://localhost:8085
+
+    fixed-fields:
+      ne: EMS
+      neIp: 1
+      alarmId: 1001
+      internalService: Kafka-connect-status

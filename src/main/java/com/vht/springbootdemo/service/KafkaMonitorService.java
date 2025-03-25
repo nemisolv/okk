@@ -3,170 +3,160 @@ package com.vht.springbootdemo.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vht.springbootdemo.api.KafkaApiClient;
+import com.vht.springbootdemo.api.KafkaConnectResponseDeserializer;
+import com.vht.springbootdemo.config.AppProperties;
 import com.vht.springbootdemo.dto.AlarmMessage;
+import com.vht.springbootdemo.dto.AlarmType;
 import com.vht.springbootdemo.dto.KafkaStatus;
 import com.vht.springbootdemo.util.LogUtil;
-import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+@Slf4j
 public class KafkaMonitorService {
-    private final RedisTemplate<String, String> redisTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final FaultManagementService faultManagementService;
-    private final KafkaApiClient kafkaApiClient;
-    private final ObjectMapper objectMapper;
     private final RedisService redisService;
+    private final List<String> instanceUrls;
+    private final AppProperties appProperties;
+    private final KafkaConnectResponseDeserializer kafkaConnectResponseDeserializer;
+    private final ExecutorService executorService = Executors.newFixedThreadPool(5);
 
     private static final String REDIS_KEY = "kafka:status";
 
-    public void monitorKafkaStatus(String kafkaApiResponse) {
-        // 1. Parse JSON response từ Kafka API
-        Map<String, KafkaStatus> newStatusMap = kafkaApiClient.fetchKafkaStatus(kafkaApiResponse);
-
-        // 2. Lấy trạng thái cũ từ Redis
-        Map<String, KafkaStatus> oldStatusMap = redisService.fetchStatusFromRedis();
-
-        // 3. So sánh & xử lý sự thay đổi trạng thái
-        processStatusChanges(newStatusMap, oldStatusMap);
-
-        // 4. Cập nhật lại Redis
-//        redisService.syncStatusToRedis(newStatusMap);
+    public KafkaMonitorService(RedisTemplate<String, Object> redisTemplate,
+                               FaultManagementService faultManagementService,
+                               RedisService redisService,
+                               AppProperties appProperties,
+                               KafkaConnectResponseDeserializer kafkaConnectResponseDeserializer) {
+        this.redisTemplate = redisTemplate;
+        this.faultManagementService = faultManagementService;
+        this.redisService = redisService;
+        this.appProperties = appProperties;
+        this.kafkaConnectResponseDeserializer = kafkaConnectResponseDeserializer;
+        this.instanceUrls = this.appProperties.getInstance().getUrl();
     }
 
+    public void monitorKafkaStatus() {
+        log.info("🚀 Bắt đầu giám sát trạng thái Kafka Connect...");
 
+        CompletableFuture<Map<String, KafkaStatus>> kafkaFuture = CompletableFuture.supplyAsync(
+                () -> instanceUrls.stream()
+                        .map(instance -> CompletableFuture.supplyAsync(
+                                () -> kafkaConnectResponseDeserializer.deserializeKafkaStatusApiResponse(instance), executorService))
+                        .map(CompletableFuture::join)
+                        .flatMap(map -> map.entrySet().stream())
+                        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+                executorService);
 
-    private void processStatusChanges(Map<String, KafkaStatus> newStatusMap, Map<String, KafkaStatus> oldStatusMap) {
+        CompletableFuture<Map<String, KafkaStatus>> redisFuture =
+                CompletableFuture.supplyAsync(redisService::fetchAllInstancesStatusFromRedis, executorService);
+
+        CompletableFuture.allOf(kafkaFuture, redisFuture)
+                .thenRunAsync(() -> processKafkaStatus(kafkaFuture.join(), redisFuture.join()))
+                .join();
+    }
+
+    private void processKafkaStatus(Map<String, KafkaStatus> newStatusMap, Map<String, KafkaStatus> oldStatusMap) {
+        long eventTime = Instant.now().toEpochMilli();
         for (Map.Entry<String, KafkaStatus> newEntry : newStatusMap.entrySet()) {
             String key = newEntry.getKey();
             KafkaStatus newStatus = newEntry.getValue();
             KafkaStatus oldStatus = oldStatusMap.get(key);
-
-            handleStateChange(newStatus, oldStatus);
+            handleStateChange(newStatus, oldStatus, eventTime);
             oldStatusMap.remove(key);
         }
-
-        // Xóa các trạng thái lỗi thời (không còn trong Kafka API)
-        for (Map.Entry<String, KafkaStatus> oldEntry : oldStatusMap.entrySet()) {
-            AlarmMessage alarmMessage = new AlarmMessage(
-                    oldEntry.getValue().getName(),
-                    oldEntry.getValue().getState(),
-                    oldEntry.getValue().getWorkerId(),
-                    "Connector/Task no longer exists in Kafka response",
-                    true,
-                    false,
-                    Instant.now().getEpochSecond(),
-                    Instant.now().getEpochSecond()
-            );
-            faultManagementService.clearAlarm(alarmMessage);
-            redisTemplate.opsForHash().delete(REDIS_KEY, oldEntry.getKey());
-        }
+        oldStatusMap.forEach((key, oldStatus) -> clearStaleStatus(oldStatus, eventTime));
     }
 
+    private void handleStateChange(KafkaStatus newStatus, KafkaStatus oldStatus, long eventTime) {
+        String newState = newStatus.getState();
+        String oldState = oldStatus != null ? oldStatus.getState() : null;
+        boolean wasFailedOrUnassigned = oldStatus != null && (oldState.equals("FAILED") || oldState.equals("UNASSIGNED"));
+        boolean isNowFailedOrUnassigned = newState.equals("FAILED") || newState.equals("UNASSIGNED");
+        boolean isTheSameBothFailedOrBothUnassigned = oldState != null && oldState.equals(newState);
+        long initialTime = isTheSameBothFailedOrBothUnassigned ? oldStatus.getInitialTime() : eventTime;
+        long triggerTime = eventTime;
+        boolean isChanged =( oldStatus == null && isNowFailedOrUnassigned )// trường hợp old RUNNING new RUNNING nếu k so sánh isNowFailedOrUnassigned thì lại thành true( bỏ cũng được vì thực chất nó vãn hoạt động đúng, vì ta không lưu vào redis + gửi alarm nên cũng k sao)
+                            || !newState.equals(oldState)
+                            || !newStatus.getTrace().equals(oldStatus.getTrace())
+                ;
+        boolean isAlarmRequired = isNowFailedOrUnassigned;
 
-    private void handleStateChange(KafkaStatus newStatus, KafkaStatus oldStatus) {
-        // isChanged khi trạng thái mới khác trạng thái cũ
-        boolean isChanged = oldStatus == null || !oldStatus.getState().equals(newStatus.getState());
-        boolean isAlarmExist = !(newStatus.getState().equals("RUNNING") || newStatus.getState().equals("PAUSED"));
+        AlarmMessage alarmMessage = AlarmMessage.builder()
+                .ne(appProperties.getFixedFields().getNe())
+                .alarmId(appProperties.getFixedFields().getAlarmId())
+                .internalService(appProperties.getFixedFields().getInternalService())
+                .neIp(appProperties.getFixedFields().getNeIp())
+                .eventType(isAlarmRequired ? AlarmType.RAISE_ALARM.getCode() : AlarmType.CLEAR_ALARM.getCode())
+                .location(newStatus.getLocation())
+                .initialTime(initialTime)
+                .triggerTime(triggerTime)
+                .additionInfo("Connector/Task state is " + newState)
+                .probableCause(newStatus.getTrace())
+                .isChanged(isChanged)
+                .build();
 
-        String problemCause = buildProblemCause(newStatus);
-
-        Long initialTime = isChanged ? Instant.now().getEpochSecond() : oldStatus.getInitialTime();
-        Long triggerTime = Instant.now().getEpochSecond(); // Luôn cập nhật triggerTime
-
-        AlarmMessage alarmMessage = new AlarmMessage(
-                newStatus.getName(),
-                newStatus.getState(),
-                newStatus.getWorkerId(),
-                problemCause,
-                isChanged,
-                isAlarmExist,
-                initialTime,
-                triggerTime
-        );
-
-        // chú ý: vì kafka connect không trả về initialTime nên phải set lại để lưu vào redis
         newStatus.setInitialTime(initialTime);
 
-
-
-        // Xử lý logic clear/log alarm theo yêu cầu
-        if (newStatus.getState().equals("RUNNING")) {
-            if (oldStatus != null) { // Nếu trước đó có trạng thái thì mới cần clear
-                LogUtil.info("[INFO] Clearing alarm for: " + newStatus.getName());
-                faultManagementService.clearAlarm(alarmMessage);
-                redisTemplate.opsForHash().delete(REDIS_KEY, newStatus.getName());
+        if (oldStatus != null && wasFailedOrUnassigned) {
+            if(!isTheSameBothFailedOrBothUnassigned) {
+//                faultManagementService.sendAlarm(alarmMessage);
+//                redisTemplate.opsForHash().put(REDIS_KEY, newStatus.getLocation(), newStatus);
+//            }else {
+                AlarmMessage clearAlarmMessage = AlarmMessage.newCopy(alarmMessage);
+                clearAlarmMessage.setEventType(AlarmType.CLEAR_ALARM.getCode());
+                clearAlarmMessage.setProbableCause(oldStatus.getTrace());
+                clearAlarmMessage.setInitialTime(oldStatus.getInitialTime());
+                clearAlarmMessage.setAdditionInfo(oldStatus.getAddtionalInfo());
+            int code=     faultManagementService.sendAlarm(clearAlarmMessage);
+            if(code ==200) {
+                redisService.deleteKafkaStatus(clearAlarmMessage.getLocation());
+                log.info("🚀 Gửi clear alarm cho location: {}", newStatus.getLocation());
+            }else {
+                // neu k gui duoc clear lên FM thi phai cap nhat lai cai cũ rồi lưu vào redis và coi như đây là alarm rác, sẽ được tự động giải phóng ở lần quét sau
+                newStatus.setInitialTime(oldStatus.getInitialTime());
+                String dirtyAlarmKey = newStatus.getLocation() + "_dirty"+"_"+eventTime;
+                redisService.saveKafkaStatus(newStatus,dirtyAlarmKey);
             }
-        } else if (newStatus.getState().equals("PAUSED")) {
-            LogUtil.info("[INFO] Kafka connector/task " + newStatus.getName() + " is PAUSED. No alarm action required.");
-        } else {
-            // Nếu là trạng thái lỗi (FAILED, UNASSIGNED, v.v.)
-            LogUtil.warn("[ALARM] Raising alarm for: " + newStatus.getName() + " - " + problemCause);
-            faultManagementService.raiseAlarm(alarmMessage);
-
-            // Cập nhật Redis khi có alarm
-            try {
-                redisTemplate.opsForHash().put(REDIS_KEY, newStatus.getName(), objectMapper.writeValueAsString(newStatus));
-            } catch (JsonProcessingException e) {
-                LogUtil.error("Failed to serialize status to Redis", e);
             }
         }
 
-
-
-//        if (isAlarmExist) {
-//            LogUtil.warn("[ALARM] Raising alarm for: " + newStatus.getName() + " - " + problemCause);
-//            faultManagementService.raiseAlarm(alarmMessage);
-//
-//            // Cập nhật Redis khi có alarm
-//            try {
-//
-//                redisTemplate.opsForHash().put(REDIS_KEY, newStatus.getName(),
-//                        objectMapper.writeValueAsString(newStatus));
-//            } catch (JsonProcessingException e) {
-//                LogUtil.error("Failed to serialize status to Redis", e);
-//            }
-//        } else {
-//            LogUtil.info("[INFO] Clearing alarm for: " + newStatus.getName());
-//            faultManagementService.clearAlarm(alarmMessage);
-//
-//
-//            // Xóa khỏi Redis nếu không còn alarm
-//            redisTemplate.opsForHash().delete(REDIS_KEY, newStatus.getName());
-//        }
+        if (isAlarmRequired) {
+           int code =  faultManagementService.sendAlarm(alarmMessage);
+            if(code ==200) {
+                redisService.saveKafkaStatus(newStatus);
+                log.info("🚀 Gửi alarm cho location: {}", newStatus.getLocation());
+            }
+        }
     }
 
-
-
-
-
-
-
-
-
-
-
-
-    private String buildProblemCause(KafkaStatus status) {
-        String state = status.getState();
-        String trace = status.getTrace();
-
-        return switch (state) {
-            case "FAILED" ->
-                    trace != null && !trace.isEmpty() ? "Failure reason: " + trace : "Connector/Task has failed unexpectedly.";
-            case "UNASSIGNED" -> "Connector/Task is unassigned and has not yet been assigned to a worker.";
-            case "PAUSED" -> "Connector/Task has been administratively paused.";
-            default -> "Unknown issue detected in state: " + state;
-        };
+    private void clearStaleStatus(KafkaStatus oldStatus, long eventTime) {
+        AlarmMessage alarmMessage = AlarmMessage.builder()
+                .ne(appProperties.getFixedFields().getNe())
+                .alarmId(appProperties.getFixedFields().getAlarmId())
+                .internalService(appProperties.getFixedFields().getInternalService())
+                .neIp(appProperties.getFixedFields().getNeIp())
+                .eventType(AlarmType.CLEAR_ALARM.getCode())
+                .location(oldStatus.getLocation())
+                .initialTime(oldStatus.getInitialTime())
+                .triggerTime(eventTime)
+                .additionInfo("Connector/Task no longer exists in Kafka response")
+                .probableCause(oldStatus.getTrace())
+                .isChanged(true)
+                .build();
+        faultManagementService.sendAlarm(alarmMessage);
+        redisService.deleteKafkaStatus(oldStatus.getLocation());
     }
-
-
-
 
 
 }

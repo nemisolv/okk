@@ -2,8 +2,11 @@ package com.vht.springbootdemo;
 
 import com.vht.springbootdemo.service.KafkaMonitorService;
 import com.vht.springbootdemo.service.RedisService;
+import com.vht.springbootdemo.service.SystemMonitorService;
+import com.vht.springbootdemo.util.AppUtil;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,25 +20,24 @@ import java.util.HashMap;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class KafkaMonitorScheduler {
     private final KafkaMonitorService kafkaMonitorService;
     private final RedisService redisService;
-
+    private final AppUtil appUtil;
+    private final SystemMonitorService systemMonitorService;
 //    @Scheduled(fixedRate = 60000) // Chạy mỗi 60 giây
     @PostConstruct
     public void runMonitoringTask() throws IOException {
-        String kafkaApiResponse = fetchKafkaApiResponse();
-        kafkaMonitorService.monitorKafkaStatus(kafkaApiResponse);
+
+        systemMonitorService.startSystemMonitor();
+
+
+        kafkaMonitorService.monitorKafkaStatus();
 
 //        redisService.syncStatusToRedis(new HashMap<>());
     }
 
 
-    private String fetchKafkaApiResponse() throws IOException {
-        // assume reading JSON from File for testing purpose
-        String filePath = "src/main/resources/kafka-api-response.json";
-        Path path = Paths.get(filePath);
-        byte[] bytes = Files.readAllBytes(path);
-        return new String(bytes);
-    }
+
 }

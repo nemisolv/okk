@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
@@ -14,54 +15,29 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 @RequiredArgsConstructor
 public class RedisConfig {
-
-    private final ObjectMapper objectMapper;
-
-
 //    @Bean
-//    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory redisConnectionFactory) {
-//        RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-//        redisTemplate.setConnectionFactory(redisConnectionFactory);
-//
-//        // Sử dụng StringRedisSerializer để serialize key
-//        redisTemplate.setKeySerializer(new StringRedisSerializer());
-//        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-//
-//
-//
-//        // Sử dụng JSON Serializer để serialize value
-//        redisTemplate.setValueSerializer(new GenericJackson2JsonRedisSerializer());
-//        redisTemplate.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
-//
-//        redisTemplate.afterPropertiesSet();
-//
-//
-//
-//        return redisTemplate;
+//    public RedisConnectionFactory redisConnectionFactory() {
+//        return new LettuceConnectionFactory(); // Dùng Lettuce thay vì Jedis
 //    }
 
-   @Bean
+
+
+
+    @Bean
    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory factory) {
-       RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-       redisTemplate.setConnectionFactory(factory);
+       RedisTemplate<String, Object> template = new RedisTemplate<>();
+       template.setConnectionFactory(factory);
 
-       // Create a custom ObjectMapper with type information
-       ObjectMapper customObjectMapper = new ObjectMapper();
-       customObjectMapper.activateDefaultTyping(
-               customObjectMapper.getPolymorphicTypeValidator(),
-               ObjectMapper.DefaultTyping.NON_FINAL,
-               JsonTypeInfo.As.PROPERTY
-       );
 
-       // Use GenericJackson2JsonRedisSerializer with the custom ObjectMapper
-       GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(customObjectMapper);
+       // Dùng JSON Serializer để lưu object dưới dạng JSON
+       template.setKeySerializer(new StringRedisSerializer());
+       template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
 
-       redisTemplate.setDefaultSerializer(serializer);
-       redisTemplate.setKeySerializer(new StringRedisSerializer());
-       redisTemplate.setValueSerializer(serializer);
-       redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-       redisTemplate.setHashValueSerializer(serializer);
+       // Dùng String serializer cho Hash key
+       template.setHashKeySerializer(new StringRedisSerializer());
+       template.setHashValueSerializer(new GenericJackson2JsonRedisSerializer());
 
-       return redisTemplate;
+
+       return template;
    }
 }
