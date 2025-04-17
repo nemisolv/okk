@@ -1,33 +1,28 @@
 spring:
+  application:
+    name: kafka-connect-monitoring-service
   data:
     redis:
-      host: redis-11295.c73.us-east-1-2.ec2.redns.redis-cloud.com
-      port: 11295
-      password: cJOtrfi9W3bhC0dJveNjJTBkT8NEhkyr
+      host: redis-12807.c73.us-east-1-2.ec2.redns.redis-cloud.com
+      port: 12807
+      password: x5mSZvZtFof9dg6TcOanszQyqq9YyEX2
       database: 0
 
 
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health, metrics
 
+monitoring:
+  cpu-threshold: 10  # in percentage
+  ram-threshold: 100  # in MB
+  kafka-instances:
+    - http://kafka1:8083
+    - http://kafka2:8083
+  cron: "0 */5 * * * *" # mỗi 5 phút
 
+  fm:
+    url: http://172.16.28.194:8083/fm
+    ne: EMS
+    neIp: 1
+    alarmId: 1001
+    internalService: Kafka-connect-status
 
-app:
-  kafka-connect:
-    instance:
-      url:
-#      - http://localhost:8080
-      - http://localhost:8081
-      - http://localhost:8082
-      - http://localhost:8083
-      - http://localhost:8085
-
-    fixed-fields:
-      ne: EMS
-      neIp: 1
-      alarmId: 1001
-      internalService: Kafka-connect-status
