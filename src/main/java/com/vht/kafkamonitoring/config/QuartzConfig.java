@@ -5,7 +5,6 @@ import com.vht.kafkamonitoring.dto.ThresholdConfig;
 import com.vht.kafkamonitoring.service.MonitoringJob;
 import lombok.RequiredArgsConstructor;
 import org.quartz.*;
-import org.quartz.impl.StdSchedulerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
@@ -42,8 +41,5 @@ public class QuartzConfig {
     }
 
 
-    public void updateTriggerSchedule(String newCronExpression) throws SchedulerException {
 
-
-    }
 }

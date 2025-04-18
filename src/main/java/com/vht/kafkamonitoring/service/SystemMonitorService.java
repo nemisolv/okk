@@ -40,13 +40,13 @@ public class SystemMonitorService {
             AlarmMessage alarm = buildAlarmMessage(AlarmType.RAISE_ALARM, info + " is overloaded", info, location, initialTime, now, isChanged);
             if (sendAlarm(alarm)) {
                 redisService.set(RedisService.REDIS_KEY_SYSTEM_STATUS,
-                        buildMonitoredStatus(location, initialTime, info + " is overloaded"),
-                        MonitoredStatus.class);
+                        buildMonitoredStatus(location, initialTime, info + " is overloaded")
+                );
             }
         } else if (previousState != null && previousState.getState() == MonitoredState.OVERLOADED) {
             AlarmMessage alarm = buildAlarmMessage(AlarmType.CLEAR_ALARM, info + " back to normal", "Clear alarm: " + info + " back to normal", location, initialTime, now, isChanged);
             if (sendAlarm(alarm)) {
-                redisService.set(RedisService.REDIS_KEY_SYSTEM_STATUS, null, MonitoredStatus.class);
+                redisService.set(RedisService.REDIS_KEY_SYSTEM_STATUS, null);
             }
         }
     }

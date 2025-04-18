@@ -8,6 +8,7 @@ import com.vht.kafkamonitoring.dto.AlarmType;
 import com.vht.kafkamonitoring.dto.MonitoredState;
 import com.vht.kafkamonitoring.dto.MonitoredStatus;
 import com.vht.kafkamonitoring.exception.KafkaConnectApiException;
+import com.vht.kafkamonitoring.util.LogUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -27,6 +28,8 @@ public class KafkaMonitorService {
     private final KafkaConnectResponseDeserializer kafkaConnectResponseDeserializer;
     private final MonitoringThresholdConfig monitoringThresholdConfig;
     private long eventTime = Instant.now().toEpochMilli();
+    private final MonitoringConfigProperties defaultConfigFM;
+
 
     public void monitorKafkaStatus() {
         log.info("🚀 Bắt đầu giám sát trạng thái Kafka Connect...");
@@ -44,13 +47,13 @@ public class KafkaMonitorService {
 
     @Async("kafkaMonitorExecutor")
     protected CompletableFuture<Void> processKafkaInstance(String instanceUrl) {
-        MonitoredStatus elementInstanceRedis = null ;
+        MonitoredStatus elementInstanceRedis = null;
         // call api kafka connect
         try {
             //  check nếu có previous trong redis thì clear alarm, cập nhật redis
-             elementInstanceRedis = redisService.getElementInAKafkaSpecificInstance(instanceUrl);
+            elementInstanceRedis = redisService.getElementInAKafkaSpecificInstance(instanceUrl);
             Map<String, MonitoredStatus> currentKafka = kafkaConnectResponseDeserializer.deserializeKafkaStatusApiResponse(instanceUrl);
-            if(elementInstanceRedis != null) {
+            if (elementInstanceRedis != null) {
                 // clear
                 AlarmMessage alarmMessage = AlarmMessage.builder()
                         .eventType(AlarmType.CLEAR_ALARM.getCode())
@@ -62,7 +65,8 @@ public class KafkaMonitorService {
                         .isChanged(true)
                         .build();
                 int code = faultManagementService.sendAlarm(alarmMessage);
-                if(code ==200) {
+                if (code == 200) {
+                    LogUtil.info("🚀 Clear alarm for instance: " + instanceUrl);
                     redisService.putKafkaStateIntoSpecificInstance(null, instanceUrl);
                 }
             }
@@ -79,14 +83,14 @@ public class KafkaMonitorService {
                     .probableCause("Could connect to Kafka Connect API instance: " + instanceUrl + " - ex: " + ex.getMessage())
                     .additionalInfo("")
                     .build();
-            if(elementInstanceRedis != null) {
+            if (elementInstanceRedis != null) {
                 raiseAlarm(errorStatus, elementInstanceRedis.getInitialTime(), true);
-            }else {
+            } else {
                 raiseAlarm(errorStatus, eventTime, true);
             }
-
+            LogUtil.warn("Couldn't connect to Kafka Connect API instance: " + instanceUrl + " - ex: " + ex.getMessage());
         } catch (Exception ex) {
-            log.warn("Error when fetching Kafka status from " + instanceUrl);
+            LogUtil.warn("Error when fetching Kafka status from " + instanceUrl);
         }
         return null;
     }
@@ -110,7 +114,7 @@ public class KafkaMonitorService {
         // Trường hợp 1: Trạng thái trước là null (RUNNING hoặc PAUSED)
         if (oldStatus == null) {
             if (isFailedOrUnassigned(newState)) {
-                raiseAlarm(newStatus,eventTime, true);
+                raiseAlarm(newStatus, eventTime, true);
             }
             return;
         }
@@ -127,9 +131,11 @@ public class KafkaMonitorService {
             raiseAlarm(newStatus, eventTime, true);
         }
     }
+
     private boolean isFailedOrUnassigned(MonitoredState state) {
         return state.equals(getMonitoredState("FAILED")) || state.equals(getMonitoredState("UNASSIGNED"));
     }
+
     private void handlePreviousFailedOrUnassignedState(MonitoredStatus newStatus, MonitoredStatus oldStatus) {
         MonitoredState newState = newStatus.getState();
         MonitoredState oldState = oldStatus.getState();
@@ -147,6 +153,7 @@ public class KafkaMonitorService {
             raiseAlarm(newStatus, eventTime, true);
         }
     }
+
     private void raiseAlarm(MonitoredStatus status, long eventTime, boolean isChanged) {
         AlarmMessage alarmMessage = buildAlarmMessage(status, AlarmType.RAISE_ALARM.getCode(), eventTime, isChanged);
         int code = faultManagementService.sendAlarm(alarmMessage);
@@ -155,6 +162,7 @@ public class KafkaMonitorService {
             redisService.putKafkaStateIntoSpecificInstance(status, status.getLocation());
         }
     }
+
     private void clearAlarm(MonitoredStatus status, long eventTime) {
         AlarmMessage clearAlarmMessage = buildAlarmMessage(status, AlarmType.CLEAR_ALARM.getCode(), status.getInitialTime(), true);
         int code = faultManagementService.sendAlarm(clearAlarmMessage);
@@ -167,12 +175,33 @@ public class KafkaMonitorService {
             redisService.putKafkaStateIntoSpecificInstance(status, dirtyAlarmKey);
         }
     }
-    private AlarmMessage buildAlarmMessage(MonitoredStatus status, String eventType, long initialTime, boolean isChanged) {
+
+    public AlarmMessage buildAlarmMessage(MonitoredStatus status, String eventType, long initialTime, boolean isChanged) {
         return AlarmMessage.builder()
+                .ne(defaultConfigFM.getFm().getNe())
+                .alarmId(defaultConfigFM.getFm().getAlarmId())
+                .neIp(defaultConfigFM.getFm().getNeIp())
+                .internalService(defaultConfigFM.getFm().getInternalService())
                 .eventType(eventType)
                 .location(status.getLocation())
                 .initialTime(initialTime)
                 .triggerTime(eventTime)
+                .additionInfo(status.getAdditionalInfo())
+                .probableCause(status.getProbableCause())
+                .isChanged(isChanged)
+                .build();
+    }
+
+    public AlarmMessage buildAlarmMessage(MonitoredStatus status, String eventType, long initialTime, long triggerTime, boolean isChanged) {
+        return AlarmMessage.builder()
+                .ne(defaultConfigFM.getFm().getNe())
+                .alarmId(defaultConfigFM.getFm().getAlarmId())
+                .neIp(defaultConfigFM.getFm().getNeIp())
+                .internalService(defaultConfigFM.getFm().getInternalService())
+                .eventType(eventType)
+                .location(status.getLocation())
+                .initialTime(initialTime)
+                .triggerTime(triggerTime)
                 .additionInfo(status.getAdditionalInfo())
                 .probableCause(status.getProbableCause())
                 .isChanged(isChanged)
@@ -184,24 +213,15 @@ public class KafkaMonitorService {
         AlarmMessage alarmMessage = buildAlarmMessage(oldStatus, AlarmType.CLEAR_ALARM.getCode(), oldStatus.getInitialTime(), true);
 
         int code = faultManagementService.sendAlarm(alarmMessage);
-        if(code ==200) {
+        if (code == 200) {
+            LogUtil.info("Stale alarm cleared for location: "+ oldStatus.getLocation());
             redisService.putKafkaStateIntoSpecificInstance(null, oldStatus.getLocation());
         }
-
-
-//        redisService.deleteKafkaStatus(oldStatus.getLocation());
     }
 
     private MonitoredState getMonitoredState(String state) {
         return MonitoredState.fromString(state);
     }
-
-
-
-
-
-
-
 
 
 //    private void handleStateChange(MonitoredStatus newStatus, MonitoredStatus oldStatus, long eventTime) {

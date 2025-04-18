@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,6 +23,17 @@ public class FaultManagementService {
 
         // Gửi alarm đến hệ thống quản lý lỗi
         log.info("Send alarm: {}", alarmMessage);
+        return 200;
+    }
+
+    public int sendAlarm(List<AlarmMessage> batchSendAlarm) {
+        // Thiết lập thông tin mặc định cho alarm
+//        alarmMessage.setNe(defaultConfigFM.getFm().getNe());
+//        alarmMessage.setNeIp(defaultConfigFM.getFm().getNeIp());
+//        alarmMessage.setAlarmId(defaultConfigFM.getFm().getAlarmId());
+//        alarmMessage.setInternalService(defaultConfigFM.getFm().getInternalService());
+//        // Gửi alarm đến hệ thống quản lý lỗi
+//        log.info("Send alarm: {}", alarmMessage);
         return 200;
     }
 }

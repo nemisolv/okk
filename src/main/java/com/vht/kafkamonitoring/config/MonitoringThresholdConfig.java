@@ -34,7 +34,7 @@ public class MonitoringThresholdConfig {
                 .cron(fileConfig.getCron())
                 .build();
 
-        redisService.set(REDIS_KEY, defaultConfig, ThresholdConfig.class);
+        redisService.set(REDIS_KEY, defaultConfig);
 
         log.info("Set default config to Redis: {}" , defaultConfig);
 

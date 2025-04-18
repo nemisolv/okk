@@ -127,7 +127,7 @@ public class RedisService {
 
 
     // Lưu đối tượng cấu hình vào Redis, nhận kiểu đối tượng từ Class<T>
-    public <T> void set(String key, T value, Class<T> valueType) {
+    public <T> void set(String key, T value) {
         try {
 
             if(value == null) {
