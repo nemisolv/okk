@@ -15,9 +15,11 @@ monitoring:
   cpu-threshold: 10  # in percentage
   ram-threshold: 100  # in MB
   kafka-instances:
-    - http://kafka1:8083
-    - http://kafka2:8083
-  cron: "0 */5 * * * *" # mỗi 5 phút
+    - http://localhost:3000
+    - http://localhost:3001
+    - http://localhost:3002
+    - http://localhost:3003
+  cron: "0 */5 * * * ?" # mỗi 5 phút
 
   fm:
     url: http://172.16.28.194:8083/fm

@@ -17,7 +17,7 @@ public class MonitoringThresholdConfig {
     RedisService redisService;
     MonitoringConfigProperties fileConfig;
 
-    private static final String REDIS_KEY = "CONFIG:MONITORING";
+    public static final String REDIS_KEY = "CONFIG:MONITORING";
 
     public ThresholdConfig getThresholdConfig() {
         ThresholdConfig fromRedis = redisService.get(REDIS_KEY, ThresholdConfig.class);

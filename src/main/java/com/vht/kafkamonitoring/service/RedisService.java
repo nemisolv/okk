@@ -60,6 +60,9 @@ public class RedisService {
         String instanceUrl = UrlUtil.extractInstanceUrl(key);
 
         Object o = redisTemplate.opsForHash().get(instanceUrl, key);
+        if(o == null) {
+            return null;
+        }
         MonitoredStatus monitoredStatus = objectMapper.readValue(o.toString(), MonitoredStatus.class);
         return monitoredStatus;
     }

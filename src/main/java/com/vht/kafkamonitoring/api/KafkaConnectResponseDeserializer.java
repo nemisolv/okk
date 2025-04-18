@@ -67,12 +67,12 @@ public class KafkaConnectResponseDeserializer {
                     String additionalInfoTask = instanceUrl +"|" + connectorName +"-task-" + taskId + " is " + taskState + " at worker id " + taskWorkerId;
 
                     String taskKey = connectorName + "/" + taskId; // Tạo key riêng cho Task
-                    String taskLocation = buildLocation(instanceUrl,"/"+ taskKey);
+                    String taskLocation = buildLocation(instanceUrl,taskKey);
                     kafkaStatusMap.put(taskLocation,
                             MonitoredStatus.builder()
                                     .location( taskLocation)
                                     .type(MonitoredType.KAFKA_CONNECT_TASK)
-                                    .state(MonitoredState.fromString(connectorState))
+                                    .state(MonitoredState.fromString(taskState))
                                     .workerId(taskWorkerId)
                                     .probableCause(taskTraceExtracted)
                                     .additionalInfo(additionalInfoTask)

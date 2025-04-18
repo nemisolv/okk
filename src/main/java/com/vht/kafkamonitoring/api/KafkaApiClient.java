@@ -33,6 +33,8 @@ public class KafkaApiClient {
          if(response.getStatusCode().is2xxSuccessful()) {
              return response.getBody();
          }
+         return testReadFromFile();
+
      }catch (RestClientException ex) {
 //        LogUtil.warn("Error when fetching Kafka API response from " + urlBuild);
 //        // TODO: should raise alarm here
@@ -55,6 +57,18 @@ public class KafkaApiClient {
 //         faultManagementService.sendAlarm(alarmMessage);
         throw new KafkaConnectApiException("Could Call to Kafka Connect for instance: " + url);
      }
-     return null;
+//     return null;
     }
+
+    private String testReadFromFile() {
+        String filePath = "src/main/resources/kafka-api-response.json";
+        try {
+            return new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(filePath)));
+        } catch (java.io.IOException e) {
+            log.error("Error reading file: " + e.getMessage());
+            return null;
+        }
+    }
+
+
 }
